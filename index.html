@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DNS Log Viewer</title>
+    <!-- Add Bootstrap CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- Add Font Awesome CSS (CDN) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <!-- Add custom CSS for scrollable log container -->
+    <style>
+        body {
+            padding: 20px;
+        }
+        .log-container {
+            max-height: 400px; /* Set the desired maximum height for the log container */
+            overflow-y: scroll; /* Add a vertical scrollbar when content overflows */
+            font-family: 'Consolas', monospace; /* Use Consolas font */
+        }
+        .social-media-footer {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .social-media-link {
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mt-4">DNS Log Viewer</h1>
+        <!-- Add a scrollable log container with Bootstrap styling -->
+        <div class="log-container border rounded p-3 mt-4">
+            <!-- Log messages will be appended here -->
+        </div>
+    </div>
+    <!-- Social Media Footer -->
+    <div class="social-media-footer">
+        <a class="social-media-link" href="https://twitter.com/karfianto" target="_blank">
+            <i class="fab fa-twitter fa-2x"></i> <!-- Font Awesome Twitter icon -->
+        </a>
+        <a class="social-media-link" href="https://github.com/karfianto/kdns" target="_blank">
+            <i class="fab fa-github fa-2x"></i> <!-- Font Awesome GitHub icon -->
+        </a>
+    </div>
+
+    <!-- Add Bootstrap JS (optional) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        // Create a WebSocket connection
+        const socket = new WebSocket("ws://localhost:8080/ws");
+
+        // Function to prepend log messages to the top of the web page
+        function prependLog(message) {
+            const logContainer = document.querySelector(".log-container");
+            const logMessage = document.createElement("div");
+            logMessage.textContent = message;
+            logContainer.insertBefore(logMessage, logContainer.firstChild);
+        }
+
+        // Handle WebSocket messages
+        socket.onmessage = function(event) {
+            const logMessage = event.data;
+            prependLog(logMessage);
+        };
+
+        // Handle WebSocket connection errors
+        socket.onerror = function(event) {
+            prependLog("WebSocket error: " + event.data);
+        };
+
+        // Handle WebSocket connection closed
+        socket.onclose = function(event) {
+            if (event.wasClean) {
+                prependLog("WebSocket connection closed cleanly, code=" + event.code + ", reason=" + event.reason);
+            } else {
+                prependLog("WebSocket connection died");
+            }
+        };
+
+        // Handle page unload (close WebSocket)
+        window.onbeforeunload = function() {
+            socket.close();
+        };
+    </script>
+</body>
+</html>

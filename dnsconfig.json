@@ -1,0 +1,32 @@
+{
+    "ServerAddr": "127.0.0.1:53",
+    "ExternalAddr": "1.1.1.1:53",
+    "Zones": [
+        {
+            "Zone": "example.com.",
+            "Records": {
+                "www.example.com.": {
+                    "Type": "A",
+                    "Data": "192.168.1.1"
+                },
+                "mail.example.com.": {
+                    "Type": "MX",
+                    "Data": "10 mailgateway.example.com."
+                }
+            }
+        },
+        {
+            "Zone": "example.org.",
+            "Records": {
+                "mail.example.org.": {
+                    "Type": "A",
+                    "Data": "192.168.1.1"
+                },
+                "www.example.org.": {
+                    "Type": "A",
+                    "Data": "192.168.1.2"
+                }
+            }
+        }
+    ]
+}
