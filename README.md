@@ -1,10 +1,11 @@
+![Alt text](image-1.png)
 # kdns
 
-kdns is a DNS traffic inspection tool designed to help you monitor and analyze DNS traffic on your localhost. This tool provides a REST API for querying and modifying DNS configuration information and a real-time web interface for visualizing DNS logs.
+kdns is a local DNS server and traffic inspection tool designed to help you monitor and analyze DNS traffic on your localhost. This tool provides a REST API for querying and modifying DNS configuration information and a real-time web interface for visualizing DNS logs.
 
 ## Motivation
 
-Inspecting DNS traffic can be essential for understanding how your applications resolve domain names and identifying any potential issues. kdns aims to simplify the process of monitoring DNS queries and responses on your local system.
+Inspecting DNS traffic can be essential for understanding how your applications resolve domain names and identifying any potential issues. kdns aims to simplify the process of modifying DNS records, monitoring DNS queries and responses on your local system.
 
 ## Features
 
