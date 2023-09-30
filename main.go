@@ -6,15 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/miekg/dns"
 	"github.com/sirupsen/logrus"
 )
@@ -56,6 +57,22 @@ var broadcast = make(chan string)
 
 func main() {
 
+	// Load environment variables from the .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	// Retrieve environment variables
+	bindURL := os.Getenv("HTTP_BIND_URL")
+	port := os.Getenv("HTTP_PORT")
+	debug := os.Getenv("HTTP_DEBUG")
+
+	// Print the environment variables for testing
+	fmt.Printf("BIND_URL: %s\n", bindURL)
+	fmt.Printf("PORT: %s\n", port)
+	fmt.Printf("DEBUG: %s\n", debug)
+
 	// Load DNS configuration
 	if err := LoadConfigFromFile("dnsconfig.json", &currentConfig); err != nil {
 		fmt.Printf("Error loading DNS config: %s\n", err)
@@ -66,11 +83,11 @@ func main() {
 	router := InitRouter()
 
 	// Start the DNS server
-	go StartDNSServer()
+	go StartDNSServer(debug)
 	go handleMessages()
 
 	// Start the API server on port 8080
-	err := router.Run(":8080")
+	err = router.Run(":" + port)
 	if err != nil {
 		fmt.Printf("Error starting API server: %s\n", err)
 	}
@@ -127,7 +144,7 @@ func updateConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Configuration updated successfully"})
 }
 
-func StartDNSServer() {
+func StartDNSServer(d string) {
 	server := &dns.Server{Addr: currentConfig.ServerAddr, Net: "udp"}
 
 	server.Handler = dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
@@ -183,7 +200,7 @@ func StartDNSServer() {
 			}
 		}
 
-		logDNSRequest(w, r)
+		logDNSRequest(w, r, d)
 
 		// Send the DNS response
 		w.WriteMsg(msg)
@@ -261,22 +278,25 @@ func getMatchingZone(name string) *ZoneConfig {
 	return nil
 }
 
-func logDNSRequest(w dns.ResponseWriter, r *dns.Msg) {
+func logDNSRequest(w dns.ResponseWriter, r *dns.Msg, d string) {
 	// Extract relevant information from the DNS request
 	srcIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
 	for _, q := range r.Question {
 		logMessage := fmt.Sprintf("Received DNS request from %s for %s (Type: %s)", srcIP, q.Name, dns.TypeToString[q.Qtype])
-		logger.WithFields(logrus.Fields{
-			"SourceIP":  srcIP,
-			"QueryName": q.Name,
-			"QueryType": dns.TypeToString[q.Qtype],
-		}).Info("Received DNS request")
-
 		// Send the log message to WebSocket clients
 		broadcast <- logMessage
 
 		// Log the message to the server logs
-		logger.Info(logMessage)
+		// logger.Info(logMessage)
+
+		if d == "true" {
+			logger.WithFields(logrus.Fields{
+				"SourceIP":  srcIP,
+				"QueryName": q.Name,
+				"QueryType": dns.TypeToString[q.Qtype],
+			}).Info("Received DNS request")
+
+		}
 	}
 }
 
