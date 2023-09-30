@@ -39,11 +39,21 @@ kdns offers a real-time web interface for visualizing DNS logs. To view the web 
     ```shell
     go build
     ```
+    Or download precompiled binaries in [release page](https://github.com/karfianto/kdns/releases).
 
 3. Run the binary
 
+    For Windows
     ```shell
     kdns.exe
+    ```
+    For Linux
+    ```shell
+    ./kdns_linux64
+    ```
+    For Mac
+    ```shell
+    ./kdns_macos
     ```
     ![Alt text](image-2.png)
 
@@ -54,6 +64,29 @@ kdns offers a real-time web interface for visualizing DNS logs. To view the web 
 5. Open your web browser and visit `http://localhost:8080` to access the real-time web interface.
 
     ![Alt text](image-3.png)
+
+## Environment Variables
+
+Before running kdns, you can configure its behavior using environment variables stored in a `.env` file. Here are the available environment variables and their descriptions:
+
+- `HTTP_BIND_URL`: The IP address to bind to. Set it to `0.0.0.0` to listen on all available network interfaces.
+
+- `HTTP_PORT`: The port number to listen on for incoming HTTP requests. Default is `8080`.
+
+- `HTTP_MODE`: Set the mode for your application. You can use `production` for production deployments and `development` for local development and debugging.
+
+- `DNS_DEBUG`: Set this to `true` to enable DNS debugging in terminal. 
+
+### Example .env File
+
+Here's an example of a `.env` file that you can customize for your needs:
+
+```plaintext
+HTTP_BIND_URL=0.0.0.0
+HTTP_PORT=8080
+HTTP_MODE=production
+DNS_DEBUG=true
+```
 
 ## How to Contribute
 Contributions to kdns are welcome and encouraged! Here's how you can contribute:
