@@ -1,89 +1,198 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="light">
 <head>
-    <title>DNS Log Viewer</title>
-    <!-- Add Bootstrap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- Add Font Awesome CSS (CDN) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <!-- Add custom CSS for scrollable log container -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>kdns • DNS Log Viewer</title>
+    <!-- Bootstrap 5.3 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-8o+2mPma1VJt9zq4Q9Qx8f0J2t0z9GZ0Wm0kXeG1y1x8p8cXqH3qgQzq2d6H1k7JmJq3uG9dW2v1j7p+zRrFQg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
-        body {
-            padding: 20px;
+        :root {
+            --brand-accent: #5b9bd5;
         }
-        .log-container {
-            max-height: 400px; /* Set the desired maximum height for the log container */
-            overflow-y: scroll; /* Add a vertical scrollbar when content overflows */
-            font-family: 'Consolas', monospace; /* Use Consolas font */
+        .navbar-brand img {
+            height: 28px;
+            width: auto;
+            margin-right: .5rem;
         }
-        .social-media-footer {
-            text-align: center;
-            margin-top: 20px;
+        .table-wrap {
+            height: calc(100vh - 172px);
+            overflow: auto;
         }
-        .social-media-link {
-            margin: 0 10px;
+        .mono {
+            font-family: Consolas, Menlo, Monaco, "Courier New", monospace;
         }
+        tfoot a { text-decoration: none; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1 class="mt-4">DNS Log Viewer</h1>
-        <!-- Add a scrollable log container with Bootstrap styling -->
-        <div class="log-container border rounded p-3 mt-4">
-            <!-- Log messages will be appended here -->
+    <!-- Header / Navbar -->
+    <nav class="navbar navbar-expand-lg border-bottom bg-body-tertiary">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <img src="https://github.com/karfianto/kdns/raw/main/image-1.png" alt="kdns logo">
+                <span class="fw-semibold">kdns</span>
+            </a>
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <div class="form-check form-switch me-2">
+                    <input class="form-check-input" type="checkbox" role="switch" id="themeToggle">
+                    <label class="form-check-label" for="themeToggle"><i class="fa-solid fa-moon"></i></label>
+                </div>
+                <a class="btn btn-sm btn-outline-primary" href="https://github.com/karfianto/kdns" target="_blank"><i class="fa-brands fa-github me-1"></i>Star</a>
+            </div>
         </div>
-    </div>
-    <!-- Social Media Footer -->
-    <div class="social-media-footer">
-        <a class="social-media-link" href="https://twitter.com/karfianto" target="_blank">
-            <i class="fab fa-twitter fa-2x"></i> <!-- Font Awesome Twitter icon -->
-        </a>
-        <a class="social-media-link" href="https://github.com/karfianto/kdns" target="_blank">
-            <i class="fab fa-github fa-2x"></i> <!-- Font Awesome GitHub icon -->
-        </a>
-    </div>
+    </nav>
 
-    <!-- Add Bootstrap JS (optional) -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <!-- Main Content -->
+    <main class="container-fluid py-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h5 class="mb-0">Real-time DNS Events</h5>
+            <div class="text-muted small" id="status">Connecting…</div>
+        </div>
+        <div class="card shadow-sm">
+            <div class="table-responsive table-wrap">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 160px;">Time</th>
+                            <th style="width: 100px;">Type</th>
+                            <th style="width: 140px;">Source</th>
+                            <th>Query / Answers</th>
+                            <th style="width: 120px;" class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logBody" class="mono"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
 
+    <!-- Footer -->
+    <footer class="border-top py-3">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <div class="small text-body-secondary">© <span id="year"></span> kdns</div>
+            <div>
+                <a class="me-3" href="https://github.com/karfianto/kdns" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a>
+                <a href="https://twitter.com/karfianto" target="_blank"><i class="fa-brands fa-x-twitter"></i> X</a>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
     <script>
-        // Create a WebSocket connection
-        const socket = new WebSocket("ws://localhost:8080/ws");
+        // Theme toggle with persistence
+        const root = document.documentElement;
+        const themeToggle = document.getElementById('themeToggle');
+        const savedTheme = localStorage.getItem('kdns-theme');
+        if (savedTheme) {
+            root.setAttribute('data-bs-theme', savedTheme);
+            themeToggle.checked = savedTheme === 'dark';
+        }
+        themeToggle.addEventListener('change', () => {
+            const next = themeToggle.checked ? 'dark' : 'light';
+            root.setAttribute('data-bs-theme', next);
+            localStorage.setItem('kdns-theme', next);
+        });
 
-        // Function to prepend log messages to the top of the web page
-        function prependLog(message) {
-            const logContainer = document.querySelector(".log-container");
-            const logMessage = document.createElement("div");
-            logMessage.textContent = message;
-            logContainer.insertBefore(logMessage, logContainer.firstChild);
+        // Footer year
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // WebSocket connection (auto-detect ws/wss and host)
+        function wsUrl() {
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            return `${proto}://${location.host}/ws`;
         }
 
-        // Handle WebSocket messages
-        socket.onmessage = function(event) {
-            const logMessage = event.data;
-            prependLog(logMessage);
-        };
+        const statusEl = document.getElementById('status');
+        let socket;
+        let rows = 0;
+        const MAX_ROWS = 500;
+        const tbody = document.getElementById('logBody');
 
-        // Handle WebSocket connection errors
-        socket.onerror = function(event) {
-            prependLog("WebSocket error: " + event.data);
-        };
+        function connect() {
+            socket = new WebSocket(wsUrl());
+            socket.onopen = () => {
+                statusEl.textContent = 'Connected';
+            };
+            socket.onclose = (e) => {
+                statusEl.textContent = 'Disconnected — retrying…';
+                setTimeout(connect, 1000);
+            };
+            socket.onerror = () => {
+                statusEl.textContent = 'Error';
+            };
+            socket.onmessage = (evt) => {
+                addEventRow(evt.data);
+            };
+        }
 
-        // Handle WebSocket connection closed
-        socket.onclose = function(event) {
-            if (event.wasClean) {
-                prependLog("WebSocket connection closed cleanly, code=" + event.code + ", reason=" + event.reason);
-            } else {
-                prependLog("WebSocket connection died");
+        function addEventRow(message) {
+            let time = new Date().toLocaleTimeString();
+            let type = 'text';
+            let source = '';
+            let qa = '';
+            let raw = message;
+            try {
+                const obj = JSON.parse(message);
+                if (obj && obj.event_type) {
+                    type = obj.event_type;
+                    time = obj.timestamp ? new Date(obj.timestamp).toLocaleTimeString() : time;
+                    source = obj.source_ip || '';
+                    if (obj.event_type === 'request') {
+                        qa = `${obj.query_name || ''} ${obj.query_type || ''}`.trim();
+                    } else if (obj.event_type === 'response') {
+                        qa = Array.isArray(obj.answers) ? obj.answers.join('\n') : '';
+                    }
+                }
+            } catch (_) {
+                // not JSON; leave defaults
+                qa = message;
             }
-        };
 
-        // Handle page unload (close WebSocket)
-        window.onbeforeunload = function() {
-            socket.close();
-        };
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${escapeHtml(time)}</td>
+                <td><span class="badge text-bg-${badgeFor(type)}">${escapeHtml(type)}</span></td>
+                <td>${escapeHtml(source)}</td>
+                <td class="white-space-pre-wrap">${escapeHtml(qa)}</td>
+                <td class="text-end">
+                    <button class="btn btn-sm btn-outline-secondary" title="Copy row"><i class="fa-regular fa-copy"></i></button>
+                </td>
+            `;
+            const copyBtn = tr.querySelector('button');
+            copyBtn.addEventListener('click', () => navigator.clipboard.writeText(raw));
+
+            tbody.insertBefore(tr, tbody.firstChild);
+            rows++;
+            while (rows > MAX_ROWS && tbody.lastChild) {
+                tbody.removeChild(tbody.lastChild);
+                rows--;
+            }
+        }
+
+        function badgeFor(type) {
+            switch (type) {
+                case 'request': return 'primary';
+                case 'response': return 'success';
+                default: return 'secondary';
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;')
+                .replace(/\n/g, '<br/>');
+        }
+
+        // Start
+        connect();
+        window.addEventListener('beforeunload', () => { try { socket && socket.close(); } catch {} });
     </script>
 </body>
 </html>
