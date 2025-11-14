@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +18,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
 	"github.com/miekg/dns"
+	kafka "github.com/segmentio/kafka-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -55,6 +57,25 @@ var upgrader = websocket.Upgrader{
 var clients = make(map[*websocket.Conn]bool)
 var broadcast = make(chan string)
 
+// Redpanda/Kafka integration
+var (
+	kafkaWriter        *kafka.Writer
+	kafkaReader        *kafka.Reader
+	kafkaTopic         string
+	enableKafkaPublish bool
+	enableKafkaConsume bool
+)
+
+type DNSEvent struct {
+	Timestamp  time.Time `json:"timestamp"`
+	EventType  string    `json:"event_type"` // request or response
+	SourceIP   string    `json:"source_ip,omitempty"`
+	QueryName  string    `json:"query_name,omitempty"`
+	QueryType  string    `json:"query_type,omitempty"`
+	Answers    []string  `json:"answers,omitempty"`
+	ServerAddr string    `json:"server_addr,omitempty"`
+}
+
 func main() {
 
 	// Load environment variables from the .env file
@@ -67,11 +88,25 @@ func main() {
 	bindURL := os.Getenv("HTTP_BIND_URL")
 	port := os.Getenv("HTTP_PORT")
 	debug := os.Getenv("HTTP_DEBUG")
+	if debug == "" {
+		// Backward compatibility with previous README/config
+		debug = os.Getenv("DNS_DEBUG")
+	}
+
+	// Redpanda/Kafka env vars
+	brokers := os.Getenv("REDPANDA_BROKERS") // comma separated
+	kafkaTopic = os.Getenv("REDPANDA_TOPIC")
+	enableKafkaPublish = strings.ToLower(os.Getenv("REDPANDA_ENABLE_PUBLISH")) == "true"
+	enableKafkaConsume = strings.ToLower(os.Getenv("REDPANDA_ENABLE_CONSUME")) == "true"
+	consumerGroup := os.Getenv("REDPANDA_CONSUMER_GROUP")
 
 	// Print the environment variables for testing
 	fmt.Printf("BIND_URL: %s\n", bindURL)
 	fmt.Printf("PORT: %s\n", port)
 	fmt.Printf("DEBUG: %s\n", debug)
+	if enableKafkaPublish || enableKafkaConsume {
+		fmt.Printf("Redpanda topic: %s, publish: %v, consume: %v\n", kafkaTopic, enableKafkaPublish, enableKafkaConsume)
+	}
 
 	// Load DNS configuration
 	if err := LoadConfigFromFile("dnsconfig.json", &currentConfig); err != nil {
@@ -85,6 +120,34 @@ func main() {
 	// Start the DNS server
 	go StartDNSServer(debug)
 	go handleMessages()
+
+	// Initialize Kafka producer/consumer if configured
+	if (enableKafkaPublish || enableKafkaConsume) && brokers != "" && kafkaTopic != "" {
+		brokerList := strings.Split(brokers, ",")
+		if enableKafkaPublish {
+			kafkaWriter = &kafka.Writer{
+				Addr:     kafka.TCP(brokerList...),
+				Topic:    kafkaTopic,
+				Balancer: &kafka.LeastBytes{},
+			}
+			fmt.Println("Redpanda publisher initialized")
+		}
+		if enableKafkaConsume {
+			groupID := consumerGroup
+			if groupID == "" {
+				groupID = "kdns-web"
+			}
+			kafkaReader = kafka.NewReader(kafka.ReaderConfig{
+				Brokers: brokerList,
+				GroupID: groupID,
+				Topic:   kafkaTopic,
+			})
+			go consumeKafkaToWebsocket()
+			fmt.Println("Redpanda consumer initialized")
+		}
+	} else if enableKafkaPublish || enableKafkaConsume {
+		fmt.Println("Redpanda env not fully set. Skipping Kafka init.")
+	}
 
 	// Start the API server on port 8080
 	err = router.Run(":" + port)
@@ -202,6 +265,22 @@ func StartDNSServer(d string) {
 
 		logDNSRequest(w, r, d)
 
+		// Publish response event (answers)
+		if enableKafkaPublish && kafkaWriter != nil {
+			ans := make([]string, 0, len(msg.Answer))
+			for _, a := range msg.Answer {
+				ans = append(ans, a.String())
+			}
+			srcIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
+			publishDNSEvent(DNSEvent{
+				Timestamp:  time.Now(),
+				EventType:  "response",
+				SourceIP:   srcIP,
+				Answers:    ans,
+				ServerAddr: currentConfig.ServerAddr,
+			})
+		}
+
 		// Send the DNS response
 		w.WriteMsg(msg)
 	})
@@ -283,8 +362,20 @@ func logDNSRequest(w dns.ResponseWriter, r *dns.Msg, d string) {
 	srcIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
 	for _, q := range r.Question {
 		logMessage := fmt.Sprintf("Received DNS request from %s for %s (Type: %s)", srcIP, q.Name, dns.TypeToString[q.Qtype])
-		// Send the log message to WebSocket clients
+		// Send the log message to WebSocket clients (kept for backward compatibility)
 		broadcast <- logMessage
+
+		// Publish to Redpanda if enabled
+		if enableKafkaPublish && kafkaWriter != nil {
+			publishDNSEvent(DNSEvent{
+				Timestamp:  time.Now(),
+				EventType:  "request",
+				SourceIP:   srcIP,
+				QueryName:  q.Name,
+				QueryType:  dns.TypeToString[q.Qtype],
+				ServerAddr: currentConfig.ServerAddr,
+			})
+		}
 
 		// Log the message to the server logs
 		// logger.Info(logMessage)
@@ -336,6 +427,43 @@ func handleMessages() {
 			}
 		}
 	}
+}
+
+// publishDNSEvent publishes the given event to Redpanda/Kafka as JSON.
+func publishDNSEvent(ev DNSEvent) {
+	if kafkaWriter == nil {
+		return
+	}
+	data, err := json.Marshal(ev)
+	if err != nil {
+		return
+	}
+	_ = kafkaWriter.WriteMessages(
+		contextBackground(),
+		kafka.Message{Value: data},
+	)
+}
+
+// consumeKafkaToWebsocket reads from Kafka and forwards messages to websocket clients.
+func consumeKafkaToWebsocket() {
+	if kafkaReader == nil {
+		return
+	}
+	for {
+		m, err := kafkaReader.ReadMessage(contextBackground())
+		if err != nil {
+			// transient errors are ignored; avoid spamming logs
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		// forward raw payload to clients
+		broadcast <- string(m.Value)
+	}
+}
+
+// lightweight indirection to avoid importing context at top if not needed elsewhere
+func contextBackground() context.Context {
+	return context.Background()
 }
 func handleHTTP(c *gin.Context) {
 	// Serve the HTML file

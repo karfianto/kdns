@@ -15,6 +15,12 @@ Inspecting DNS traffic can be essential for understanding how your applications 
 - Real-time web interface for visualizing DNS logs
 - Fast, simple, and easy-to-use 
 
+### New: Redpanda/Kafka Streaming
+
+- Publish DNS events to a Redpanda topic
+- Optionally consume the same topic and forward to the WebSocket UI
+- Decoupled logging: applications can subscribe to the topic for real-time DNS events
+
 ## REST API Documentation
 
 The REST API provided by kdns allows you to retrieve DNS information programmatically. Here are some of the available endpoints:
@@ -77,6 +83,16 @@ Before running kdns, you can configure its behavior using environment variables 
 
 - `DNS_DEBUG`: Set this to `true` to enable DNS debugging in terminal. 
 
+### Redpanda/Kafka Integration (Optional)
+
+Enable these to publish/consume DNS events via Redpanda (Kafka API):
+
+- `REDPANDA_BROKERS`: Comma-separated broker addresses, e.g. `localhost:9092`
+- `REDPANDA_TOPIC`: Topic name to publish/consume, e.g. `kdns.dns.events`
+- `REDPANDA_ENABLE_PUBLISH`: Set to `true` to publish DNS request/response events
+- `REDPANDA_ENABLE_CONSUME`: Set to `true` to consume the topic and forward received messages to connected WebSocket clients
+- `REDPANDA_CONSUMER_GROUP`: (optional) Consumer group ID for the web process. Defaults to `kdns-web` if not set
+
 ### Example .env File
 
 Here's an example of a `.env` file that you can customize for your needs:
@@ -86,7 +102,51 @@ HTTP_BIND_URL=0.0.0.0
 HTTP_PORT=8080
 HTTP_MODE=production
 DNS_DEBUG=true
+
+# Redpanda streaming (optional)
+REDPANDA_BROKERS=localhost:9092
+REDPANDA_TOPIC=kdns.dns.events
+REDPANDA_ENABLE_PUBLISH=true
+REDPANDA_ENABLE_CONSUME=true
+REDPANDA_CONSUMER_GROUP=kdns-web
 ```
+
+## Redpanda Streaming Overview
+
+When enabled, kdns will:
+
+- Publish a JSON event for every DNS request and response processed. Example payloads:
+
+  Request event
+  ```json
+  {
+    "timestamp": "2025-01-01T12:34:56.789Z",
+    "event_type": "request",
+    "source_ip": "127.0.0.1",
+    "query_name": "example.com.",
+    "query_type": "A",
+    "server_addr": ":53"
+  }
+  ```
+
+  Response event
+  ```json
+  {
+    "timestamp": "2025-01-01T12:34:56.800Z",
+    "event_type": "response",
+    "source_ip": "127.0.0.1",
+    "answers": [
+      "example.com.  300 IN A 93.184.216.34"
+    ],
+    "server_addr": ":53"
+  }
+  ```
+
+- If `REDPANDA_ENABLE_CONSUME=true`, read from the same topic and forward raw messages to the existing WebSocket endpoint (`/ws`). This keeps the UI in sync with the topic and allows other consumers to process the same stream independently.
+
+Notes:
+- If Redpanda env vars are not fully set, kdns will skip streaming and continue serving the WebSocket-only logs as before.
+- The Web UI still receives human-readable log lines directly from the server even when publishing is enabled; consuming from the topic will additionally forward JSON messages to clients.
 
 ## How to Contribute
 Contributions to kdns are welcome and encouraged! Here's how you can contribute:
